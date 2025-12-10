@@ -15,7 +15,8 @@ COPY . .
 # Environment variables
 ENV PORT=3000
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+# Base image sets PUPPETEER_EXECUTABLE_PATH automatically
+
 
 EXPOSE 3000
 
