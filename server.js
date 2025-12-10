@@ -161,32 +161,41 @@ async function fetchWithAxios(url) {
 
 // Helper: Cobalt API Fallback (Public robust downloader)
 async function fetchWithCobalt(url) {
-    // List of Cobalt instances
+    // Cobalt v10 instances
     const instances = [
-        'https://co.wuk.sh/api/json',
-        'https://api.cobalt.tools/api/json',
-        'https://cobalt.kwiatekmiki.pl/api/json'
+        'https://api.cobalt.tools', // Main
+        'https://cobalt.api.wuk.sh'  // Alternative
     ];
 
     for (const instance of instances) {
         try {
             console.log(`Attempting Cobalt API at ${instance}...`);
-            const response = await axios.post(instance, {
+            // v10 uses POST to / (or /api/json depending on instance)
+            // Official docs say POST /
+            const endpoint = instance + '/';
+
+            const response = await axios.post(endpoint, {
                 url: url,
-                vCodec: 'h264' // Ensure compatible video
+                videoQuality: 'max',
+                filenamePattern: 'classic',
+                isAudioOnly: false,
+                disableMetadata: true
             }, {
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
                 },
-                timeout: 15000
+                timeout: 25000
             });
 
             const data = response.data;
-            if (data && (data.url || data.stream)) {
+            // v10 response: { status: 'stream', url: '...' } or { status: 'success', text: '...' }
+            if (data && (data.url || (data.picker && data.picker[0].url))) {
+                const videoUrl = data.url || data.picker[0].url;
+                const imageUrl = data.picker && data.picker[0].thumb ? data.picker[0].thumb : '';
                 return {
-                    url_list: [data.url || data.stream],
-                    image_url: data.picker ? data.picker[0].thumb : '' // Try to find thumb
+                    url_list: [videoUrl],
+                    image_url: imageUrl
                 };
             }
         } catch (e) {
