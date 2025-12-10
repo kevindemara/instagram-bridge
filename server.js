@@ -161,27 +161,39 @@ async function fetchWithAxios(url) {
 
 // Helper: Cobalt API Fallback (Public robust downloader)
 async function fetchWithCobalt(url) {
-    try {
-        console.log('Attempting Cobalt API...');
-        const response = await axios.post('https://api.cobalt.tools/api/json', {
-            url: url
-        }, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            timeout: 20000
-        });
+    // List of Cobalt instances
+    const instances = [
+        'https://co.wuk.sh/api/json',
+        'https://api.cobalt.tools/api/json',
+        'https://cobalt.kwiatekmiki.pl/api/json'
+    ];
 
-        const data = response.data;
-        if (data && (data.url || data.stream)) {
-            return {
-                url_list: [data.url || data.stream],
-                image_url: '' // Cobalt might not return thumb, but video is key
-            };
+    for (const instance of instances) {
+        try {
+            console.log(`Attempting Cobalt API at ${instance}...`);
+            const response = await axios.post(instance, {
+                url: url,
+                vCodec: 'h264' // Ensure compatible video
+            }, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            const data = response.data;
+            if (data && (data.url || data.stream)) {
+                return {
+                    url_list: [data.url || data.stream],
+                    image_url: data.picker ? data.picker[0].thumb : '' // Try to find thumb
+                };
+            }
+        } catch (e) {
+            const status = e.response ? e.response.status : 'N/A';
+            const data = e.response ? JSON.stringify(e.response.data) : 'No Data';
+            console.error(`Cobalt (${instance}) failed: Status ${status}, Data: ${data}`);
         }
-    } catch (e) {
-        console.error('Cobalt failed:', e.message);
     }
     return null;
 }
@@ -198,11 +210,8 @@ const handleFetch = async (req, res) => {
         console.log(`Fetching: ${url}`);
         let links;
 
-        // Method 1: Cobalt (Most reliable, external IP)
-        // We try this first because Railway IP is likely dirty.
-        if (!links) {
-            links = await fetchWithCobalt(url);
-        }
+        // Method 1: Cobalt
+        links = await fetchWithCobalt(url);
 
         // Method 2: Library
         if (!links || !links.url_list || links.url_list.length === 0) {
@@ -210,7 +219,7 @@ const handleFetch = async (req, res) => {
                 console.log('Method 2: Library');
                 links = await instagramGetUrl(url);
             } catch (e) {
-                console.log('Method 2 failed:', e.message);
+                console.log('Method 2 failed:', e.message || e);
             }
         }
 
