@@ -21,8 +21,14 @@ app.use((req, res, next) => {
     next();
 });
 
-app.post('/fetch', async (req, res) => {
-    const { url } = req.body;
+// Root endpoint for health check
+app.get('/', (req, res) => {
+    res.send('Instagram Bridge is running. POST to /fetch to use.');
+});
+
+// Handler logic for both GET and POST
+const handleFetch = async (req, res) => {
+    const url = req.body.url || req.query.url;
 
     if (!url) {
         return res.status(400).json({ success: false, error: 'No URL provided' });
@@ -32,14 +38,11 @@ app.post('/fetch', async (req, res) => {
         console.log(`Fetching: ${url}`);
         const links = await instagramGetUrl(url);
 
-        // Structure from instagram-url-direct: { results_number: 1, url_list: [ '...' ] }
         if (links.url_list && links.url_list.length > 0) {
             return res.json({
                 success: true,
-                video_url: links.url_list[0], // First URL usually video
-                image_url: '' // Often doesn't return thumbnail separate, WP will generate if video uploaded? 
-                // Actually instagram-url-direct might return different structure depending on version. 
-                // Let's assume it returns a list.
+                video_url: links.url_list[0],
+                image_url: ''
             });
         } else {
             return res.status(404).json({ success: false, error: 'No media found' });
@@ -49,7 +52,11 @@ app.post('/fetch', async (req, res) => {
         console.error(error);
         return res.status(500).json({ success: false, error: error.message });
     }
-});
+};
+
+app.post('/fetch', handleFetch);
+app.get('/fetch', handleFetch);
+
 
 app.listen(PORT, () => {
     console.log(`Instagram Bridge running on http://localhost:${PORT}`);
