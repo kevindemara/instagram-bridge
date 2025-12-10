@@ -35,13 +35,18 @@ app.get('/', (req, res) => {
     res.send('Instagram Bridge is running. POST to /fetch to use.');
 });
 
-// Helper: Puppeteer Fallback
+// Helper: Puppeteer Fallback (The simplified, headless browser approach)
 async function fetchWithPuppeteer(url) {
     let browser = null;
     try {
         console.log('Attempting Puppeteer...');
+        // Debug Env
+        console.log('Env PUPPETEER_EXECUTABLE_PATH:', process.env.PUPPETEER_EXECUTABLE_PATH);
+
         browser = await puppeteer.launch({
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
+            // If env is set, use it. Otherwise try 'google-chrome-stable' from PATH.
+            // If that fails, the Docker image might be using a different name.
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 'google-chrome-stable',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
