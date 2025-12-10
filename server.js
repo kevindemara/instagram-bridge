@@ -159,34 +159,88 @@ async function fetchWithAxios(url) {
     return null;
 }
 
+// Helper: Cobalt API Fallback (Public robust downloader)
+async function fetchWithCobalt(url) {
+    try {
+        console.log('Attempting Cobalt API...');
+        const response = await axios.post('https://api.cobalt.tools/api/json', {
+            url: url
+        }, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            timeout: 20000
+        });
+
+        const data = response.data;
+        if (data && (data.url || data.stream)) {
+            return {
+                url_list: [data.url || data.stream],
+                image_url: '' // Cobalt might not return thumb, but video is key
+            };
+        }
+    } catch (e) {
+        console.error('Cobalt failed:', e.message);
+    }
+    return null;
+}
+
+// Handler logic
 const handleFetch = async (req, res) => {
     const url = req.body.url || req.query.url;
-    if (!url) return res.status(400).json({ success: false, error: 'No URL provided' });
 
-    console.log(`Fetching: ${url}`);
-
-    // Reverse Priority: Try Puppeteer FIRST because simple scraping is failing hard.
-    // Actually no, Puppeteer is slow. Keep order but enable Puppeteer.
-
-    let links;
-
-    // 1. Lib
-    try { links = await instagramGetUrl(url); } catch (e) { }
-
-    // 2. Axios
-    if (!links || !links.url_list || links.url_list.length === 0) {
-        links = await fetchWithAxios(url);
+    if (!url) {
+        return res.status(400).json({ success: false, error: 'No URL provided' });
     }
 
-    // 3. Puppeteer
-    if (!links || !links.url_list || links.url_list.length === 0) {
-        links = await fetchWithPuppeteer(url);
-    }
+    try {
+        console.log(`Fetching: ${url}`);
+        let links;
 
-    if (links && links.url_list && links.url_list.length > 0) {
-        res.json({ success: true, video_url: links.url_list[0] });
-    } else {
-        res.status(404).json({ success: false, error: 'No media found', details: 'All methods failed. Check Railway logs for Page Title/Snippet.' });
+        // Method 1: Cobalt (Most reliable, external IP)
+        // We try this first because Railway IP is likely dirty.
+        if (!links) {
+            links = await fetchWithCobalt(url);
+        }
+
+        // Method 2: Library
+        if (!links || !links.url_list || links.url_list.length === 0) {
+            try {
+                console.log('Method 2: Library');
+                links = await instagramGetUrl(url);
+            } catch (e) {
+                console.log('Method 2 failed:', e.message);
+            }
+        }
+
+        // Method 3: Axios
+        if (!links || !links.url_list || links.url_list.length === 0) {
+            console.log('Method 3: Axios Fallback');
+            const fallbackLinks = await fetchWithAxios(url);
+            if (fallbackLinks) links = fallbackLinks;
+        }
+
+        // Method 4: Puppeteer
+        if (!links || !links.url_list || links.url_list.length === 0) {
+            console.log('Method 4: Puppeteer Fallback');
+            const puppeteerLinks = await fetchWithPuppeteer(url);
+            if (puppeteerLinks) links = puppeteerLinks;
+        }
+
+        if (links && links.url_list && links.url_list.length > 0) {
+            return res.json({
+                success: true,
+                video_url: links.url_list[0],
+                image_url: links.image_url || ''
+            });
+        } else {
+            return res.status(404).json({ success: false, error: 'No media found', details: 'All methods failed (Cobalt, Lib, Axios, Puppeteer).' });
+        }
+
+    } catch (error) {
+        console.error('Server Error:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
