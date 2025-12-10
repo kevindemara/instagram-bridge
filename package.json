@@ -11,6 +11,7 @@
     "instagram-url-direct": "^1.0.13",
     "cors": "^2.8.5",
     "axios": "^1.6.2",
-    "fake-useragent": "^1.0.1"
+    "fake-useragent": "^1.0.1",
+    "puppeteer-core": "^21.0.0"
   }
 }

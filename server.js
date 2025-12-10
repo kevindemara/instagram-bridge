@@ -2,6 +2,7 @@ const express = require('express');
 let instagramGetUrl = require('instagram-url-direct');
 const axios = require('axios');
 const cors = require('cors');
+const puppeteer = require('puppeteer-core');
 
 // Handle ESM default export or named export in CommonJS
 if (typeof instagramGetUrl !== 'function') {
@@ -35,6 +36,69 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
     res.send('Instagram Bridge is running. POST to /fetch to use.');
 });
+
+// Helper: Puppeteer Fallback (The simplified, headless browser approach)
+async function fetchWithPuppeteer(url) {
+    let browser = null;
+    try {
+        console.log('Attempting Puppeteer...');
+        browser = await puppeteer.launch({
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process'],
+            headless: 'new'
+        });
+
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        // Go to URL
+        // Using networkidle2 to wait for initial load
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
+
+        // Wait for video tag (give it a moment to render)
+        try {
+            await page.waitForSelector('video', { timeout: 8000 });
+        } catch (e) {
+            // connection might be slow or login wall
+        }
+
+        // Extract
+        const data = await page.evaluate(() => {
+            const video = document.querySelector('video');
+            const poster = video ? video.getAttribute('poster') : null;
+
+            // Check for blob (won't work for download) but usually IG provides direct src
+            if (video && video.src && !video.src.startsWith('blob:')) {
+                return { video_url: video.src, image_url: poster };
+            }
+
+            // Fallback: Check for meta tags
+            const metaVideo = document.querySelector('meta[property="og:video"]');
+            const metaImage = document.querySelector('meta[property="og:image"]');
+
+            if (metaVideo) {
+                return {
+                    video_url: metaVideo.content,
+                    image_url: metaImage ? metaImage.content : null
+                };
+            }
+            return null;
+        });
+
+        if (data && data.video_url) {
+            return {
+                url_list: [data.video_url],
+                image_url: data.image_url
+            };
+        }
+
+    } catch (e) {
+        console.error('Puppeteer failed:', e.message);
+    } finally {
+        if (browser) await browser.close();
+    }
+    return null;
+}
 
 // Helper: Axios Fallback
 async function fetchWithAxios(url) {
@@ -101,23 +165,28 @@ const handleFetch = async (req, res) => {
 
     try {
         console.log(`Fetching: ${url}`);
-
-        // Method 1: instagram-url-direct
         let links;
+
+        // Method 1: Library
         try {
+            console.log('Method 1: Library');
             links = await instagramGetUrl(url);
-            console.log('Result from lib:', JSON.stringify(links));
         } catch (e) {
-            console.log('Lib failed:', e.message);
+            console.log('Method 1 failed:', e.message);
         }
 
-        // Method 2: Fallback to Axios if lib failed or returned no results
+        // Method 2: Axios
         if (!links || !links.url_list || links.url_list.length === 0) {
-            console.log('Trying fallback...');
+            console.log('Method 2: Axios Fallback');
             const fallbackLinks = await fetchWithAxios(url);
-            if (fallbackLinks) {
-                links = fallbackLinks;
-            }
+            if (fallbackLinks) links = fallbackLinks;
+        }
+
+        // Method 3: Puppeteer
+        if (!links || !links.url_list || links.url_list.length === 0) {
+            console.log('Method 3: Puppeteer Fallback');
+            const puppeteerLinks = await fetchWithPuppeteer(url);
+            if (puppeteerLinks) links = puppeteerLinks;
         }
 
         if (links && links.url_list && links.url_list.length > 0) {
@@ -127,7 +196,7 @@ const handleFetch = async (req, res) => {
                 image_url: links.image_url || ''
             });
         } else {
-            return res.status(404).json({ success: false, error: 'No media found', details: 'Both methods failed' });
+            return res.status(404).json({ success: false, error: 'No media found', details: 'All 3 methods failed' });
         }
 
     } catch (error) {
