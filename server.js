@@ -1,5 +1,15 @@
 const express = require('express');
-const instagramGetUrl = require('instagram-url-direct');
+let instagramGetUrl = require('instagram-url-direct');
+
+// Handle ESM default export or named export in CommonJS
+if (typeof instagramGetUrl !== 'function') {
+    if (typeof instagramGetUrl.default === 'function') {
+        instagramGetUrl = instagramGetUrl.default;
+    } else if (typeof instagramGetUrl.instagramGetUrl === 'function') {
+        instagramGetUrl = instagramGetUrl.instagramGetUrl;
+    }
+}
+
 const cors = require('cors');
 
 const app = express();
