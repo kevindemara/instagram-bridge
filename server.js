@@ -44,9 +44,8 @@ async function fetchWithPuppeteer(url) {
         console.log('Env PUPPETEER_EXECUTABLE_PATH:', process.env.PUPPETEER_EXECUTABLE_PATH);
 
         browser = await puppeteer.launch({
-            // If env is set, use it. Otherwise try 'google-chrome-stable' from PATH.
-            // If that fails, the Docker image might be using a different name.
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 'google-chrome-stable',
+            // Use env var (set to /usr/bin/chromium in Dockerfile)
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 'chromium',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
