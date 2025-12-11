@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const PROXY_PORT = 8080;
+const PROXY_PORT = 8081; // Changed to avoid collision if PORT=8080
 
 // --- Proxy Gateway Logic (Port 8080) ---
 // Used by Cobalt to rotate through PROXY_LIST
