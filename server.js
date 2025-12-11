@@ -35,7 +35,41 @@ app.get('/', (req, res) => {
     res.send('Instagram Bridge is running. POST to /fetch to use.');
 });
 
-// Helper: Puppeteer Fallback (The simplified, headless browser approach)
+// Fallback: RapidAPI (Paid/Freemium Service)
+async function fetchWithRapidAPI(url) {
+    if (!process.env.RAPIDAPI_KEY) return null;
+
+    console.log('Attempting RapidAPI...');
+    try {
+        const options = {
+            method: 'GET',
+            url: 'https://instagram-downloader-2022.p.rapidapi.com/url',
+            params: { url: url },
+            headers: {
+                'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'instagram-downloader-2022.p.rapidapi.com'
+            }
+        };
+
+        const response = await axios.request(options);
+        if (response.data && response.data.Type === 'Post-Video') {
+            return {
+                url_list: [response.data.VideoUrl],
+                image_url: response.data.ThumbImgUrl
+            };
+        } else if (response.data && response.data.Type === 'Post-Image') {
+            return {
+                url_list: [], // Image only
+                image_url: response.data.ImageUrl
+            };
+        }
+    } catch (error) {
+        console.error('RapidAPI failed:', error.message);
+    }
+    return null;
+}
+
+// Fallback: Puppeteer (Headless Browser) - Now with STEALTH
 async function fetchWithPuppeteer(url) {
     console.log('Attempting Puppeteer Stealth...');
     let browser = null;
@@ -262,18 +296,25 @@ const handleFetch = async (req, res) => {
             }
         }
 
-        // Method 3: Axios
+        // Method 3: RapidAPI (If Key exists)
         if (!links || !links.url_list || links.url_list.length === 0) {
-            console.log('Method 3: Axios Fallback');
-            const fallbackLinks = await fetchWithAxios(url);
-            if (fallbackLinks) links = fallbackLinks;
+            console.log('Method 3: RapidAPI');
+            links = await fetchWithRapidAPI(url);
+            if (links) console.log('RapidAPI successful.');
         }
 
-        // Method 4: Puppeteer
+        // Method 4: Axios Fallback (JSON query)
         if (!links || !links.url_list || links.url_list.length === 0) {
-            console.log('Method 4: Puppeteer Fallback');
-            const puppeteerLinks = await fetchWithPuppeteer(url);
-            if (puppeteerLinks) links = puppeteerLinks;
+            console.log('Method 4: Axios Fallback');
+            links = await fetchWithAxios(url);
+            if (links) console.log('Axios successful.');
+        }
+
+        // Method 5: Puppeteer Fallback (Stealth)
+        if (!links || !links.url_list || links.url_list.length === 0) {
+            console.log('Method 5: Puppeteer Fallback');
+            links = await fetchWithPuppeteer(url);
+            if (links) console.log('Puppeteer successful.');
         }
 
         if (links && links.url_list && links.url_list.length > 0) {
