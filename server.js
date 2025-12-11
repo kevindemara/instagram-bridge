@@ -5,6 +5,43 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const PROXY_PORT = 8080;
+
+// --- Proxy Gateway Logic (Port 8080) ---
+// Used by Cobalt to rotate through PROXY_LIST
+// NOTE: Make sure to npm install proxy-chain
+const ProxyChain = require('proxy-chain');
+
+const initProxy = async () => {
+    const server = new ProxyChain.Server({
+        port: PROXY_PORT,
+        verbose: true,
+        prepareRequestFunction: ({ request, username, password, hostname, port, isHttp, isHttps }) => {
+            // 1. Get List
+            const list = (process.env.PROXY_LIST || '').split(',').map(s => s.trim()).filter(s => s);
+
+            // Log for debugging
+            if (!list.length) console.log("[ProxyGateway] No PROXY_LIST configured!");
+
+            if (list.length === 0) {
+                return { requestAuthentication: false, upstreamProxyUrl: undefined };
+            }
+
+            // 2. Rotate (Random)
+            const nextProxy = list[Math.floor(Math.random() * list.length)];
+            console.log(`[ProxyGateway] Request for ${hostname} -> Via ${nextProxy}`);
+
+            return {
+                requestAuthentication: false, // Internal usage
+                upstreamProxyUrl: nextProxy
+            };
+        },
+    });
+
+    await server.listen();
+    console.log(`[ProxyGateway] Listening on Internal Port ${PROXY_PORT}`);
+};
+initProxy().catch(console.error);
 
 // Middleware
 app.use(cors());
