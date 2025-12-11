@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 const cobaltUrl = 'https://cobalt-production-6c7d.up.railway.app/';
-const targetUrl = 'https://www.instagram.com/p/DSF-umYCWkZ/'; // The one user tested
+const targetUrl = 'https://www.instagram.com/p/DR9vLD2jmKG/'; // The one user tested successfully
 
 async function testCobalt() {
     console.log(`Testing Cobalt directly at: ${cobaltUrl}`);
@@ -9,15 +9,12 @@ async function testCobalt() {
 
     try {
         const response = await axios.post(cobaltUrl, {
-            url: targetUrl,
-            filenameStyle: 'basic'
+            url: targetUrl
         }, {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Origin': cobaltUrl,
-                'Referer': cobaltUrl
+                'User-Agent': 'curl/7.68.0'
             }
         });
 

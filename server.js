@@ -228,13 +228,55 @@ async function fetchWithAxios(url) {
     return null;
 }
 
+const { spawn } = require('child_process');
+
+// Helper: Curl Wrapper to bypass Node/Axios fingerprinting
+function runCurl(endpoint, body) {
+    return new Promise((resolve, reject) => {
+        const curl = spawn('curl', [
+            '-X', 'POST',
+            '-k', // Insecure (matches user's curl)
+            endpoint,
+            '-H', 'Accept: application/json',
+            '-H', 'Content-Type: application/json',
+            '-H', 'User-Agent: curl/7.68.0', // Mimic curl
+            '-d', '@-' // Read from stdin
+        ]);
+
+        let stdout = '';
+        let stderr = '';
+
+        curl.stdout.on('data', d => stdout += d);
+        curl.stderr.on('data', d => stderr += d);
+
+        curl.on('close', code => {
+            if (code === 0) {
+                try {
+                    const json = JSON.parse(stdout);
+                    resolve(json);
+                } catch (e) {
+                    reject(new Error(`Invalid JSON from curl: ${stdout.substring(0, 100)}`));
+                }
+            } else {
+                reject(new Error(`Curl failed code ${code}: ${stderr}`));
+            }
+        });
+
+        curl.on('error', err => reject(err));
+
+        curl.stdin.write(JSON.stringify(body));
+        curl.stdin.end();
+    });
+}
+
 // Helper: Cobalt API Fallback (Public robust downloader)
 async function fetchWithCobalt(url) {
     // Verified Community Instances (Prioritize user-verified ones)
     const selfHosted = process.env.COBALT_URL ? process.env.COBALT_URL.replace(/\/$/, '') : null;
+    // Use user provided Cobalt first, then public
     const instances = [
-        ...(selfHosted ? [selfHosted] : []), // User's self-hosted instance (Priority #1)
-        'https://cobalt.meowing.de',     // Verified by user behavior
+        ...(selfHosted ? [selfHosted] : []),
+        'https://cobalt.meowing.de',
         'https://cobalt.clxxped.lol',
         'https://cobalt.canine.tools',
         'https://cobalt.kwiatekmiki.com'
@@ -249,23 +291,14 @@ async function fetchWithCobalt(url) {
 
         for (const endpoint of endpoints) {
             try {
-                console.log(`Attempting Cobalt API at ${endpoint}...`);
+                console.log(`Attempting Cobalt API (Curl) at ${endpoint}...`);
 
-                const response = await axios.post(endpoint, {
-                    url: url,
-                    filenameStyle: 'basic' // Minimal payload for v7/v10 compatibility
-                }, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'Origin': instance, // Critical for bypassing 405/CORS
-                        'Referer': instance + '/',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' // Bypass "axios" block
-                    },
-                    timeout: 25000
+                // Use Curl instead of Axios to match user's success
+                const data = await runCurl(endpoint, {
+                    url: url
+                    // Minimal payload: No other fields, as proved by user
                 });
 
-                const data = response.data;
                 if (data && (data.url || (data.picker && data.picker[0].url) || data.stream)) {
                     const videoUrl = data.url || (data.picker ? data.picker[0].url : data.stream);
                     const imageUrl = data.picker && data.picker[0].thumb ? data.picker[0].thumb : '';
@@ -273,14 +306,11 @@ async function fetchWithCobalt(url) {
                         url_list: [videoUrl],
                         image_url: imageUrl
                     };
+                } else if (data && data.status === 'error') {
+                    console.error(`Cobalt Error (${endpoint}):`, JSON.stringify(data));
                 }
             } catch (e) {
-                const status = e.response ? e.response.status : 'N/A';
-                // Don't log full data for 404/405 to keep logs clean
-                if (status !== 404 && status !== 405) {
-                    const data = e.response ? JSON.stringify(e.response.data) : 'No Data';
-                    console.error(`Cobalt (${endpoint}) failed: Status ${status}, Data: ${data}`);
-                }
+                console.error(`Cobalt (${endpoint}) failed:`, e.message);
             }
         }
     }
