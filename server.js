@@ -93,35 +93,44 @@ async function fetchWithCobalt(url) {
                     }
 
                     // FFMpeg Fallback (Generate if missing)
+                    let debugLog = [];
                     if (!imageUrl && videoUrl) {
                         try {
+                            debugLog.push("Starting FFMpeg Gen");
                             const rnd = Math.random().toString(36).substring(7);
-                            const tmpVid = `/ tmp / vid_${rnd}.mp4`;
-                            const tmpImg = `/ tmp / img_${rnd}.jpg`;
+                            const tmpVid = `/tmp/vid_${rnd}.mp4`;
+                            const tmpImg = `/tmp/img_${rnd}.jpg`;
 
                             // Download video stream to file
                             // Using curl to download for speed/simplicity
                             await new Promise((resolve, reject) => {
-                                const curl = spawn('curl', ['-L', '-o', tmpVid, videoUrl]);
-                                curl.on('close', (code) => code === 0 ? resolve() : reject('DL Failed'));
+                                // Added -k to ignore SSL issues in container
+                                const curl = spawn('curl', ['-L', '-k', '-o', tmpVid, videoUrl]);
+                                curl.on('close', (code) => code === 0 ? resolve() : reject('DL Failed code ' + code));
                             });
+                            debugLog.push("Video Downloaded");
 
                             // Extract Frame
                             await new Promise((resolve, reject) => {
                                 const ffmpeg = spawn('ffmpeg', ['-i', tmpVid, '-ss', '00:00:01', '-vframes', '1', tmpImg]);
-                                ffmpeg.on('close', (code) => code === 0 ? resolve() : reject('FF Failed'));
+                                ffmpeg.on('close', (code) => code === 0 ? resolve() : reject('FFMpeg Failed code ' + code));
                             });
+                            debugLog.push("Frame Extracted");
 
                             // Read as Base64
                             if (fs.existsSync(tmpImg)) {
                                 const b64 = fs.readFileSync(tmpImg, 'base64');
-                                imageUrl = `data: image / jpeg; base64, ${b64} `;
+                                imageUrl = `data:image/jpeg;base64,${b64}`;
+                                debugLog.push("Base64 Read Success");
 
                                 // Cleanup
                                 fs.unlinkSync(tmpVid);
                                 fs.unlinkSync(tmpImg);
+                            } else {
+                                debugLog.push("Image File Missing");
                             }
                         } catch (err) {
+                            debugLog.push("Error: " + err);
                             console.error("FFMpeg Gen Failed:", err);
                         }
                     }
@@ -129,7 +138,8 @@ async function fetchWithCobalt(url) {
                     if (data && (videoUrl)) {
                         return {
                             url_list: [videoUrl],
-                            image_url: imageUrl
+                            image_url: imageUrl,
+                            debug: debugLog
                         };
                     }
                 } else if (data && data.status === 'error') {
