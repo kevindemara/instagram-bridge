@@ -161,17 +161,18 @@ async function fetchWithAxios(url) {
 
 // Helper: Cobalt API Fallback (Public robust downloader)
 async function fetchWithCobalt(url) {
-    // Cobalt v10 instances
+    // Verified Community Instances (from cobalt.directory)
     const instances = [
-        'https://api.cobalt.tools', // Main
-        'https://cobalt.api.wuk.sh'  // Alternative
+        'https://cobalt.clxxped.lol',
+        'https://cobalt.meowing.de',
+        'https://cobalt.canine.tools',
+        'https://cobalt.kwiatekmiki.com' // Fallback
     ];
 
     for (const instance of instances) {
         try {
             console.log(`Attempting Cobalt API at ${instance}...`);
-            // v10 uses POST to / (or /api/json depending on instance)
-            // Official docs say POST /
+            // Try v10 endpoint (root)
             const endpoint = instance + '/';
 
             const response = await axios.post(endpoint, {
