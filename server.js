@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,10 +35,10 @@ function runCurl(endpoint, body) {
                     const json = JSON.parse(stdout);
                     resolve(json);
                 } catch (e) {
-                    reject(new Error(`Invalid JSON from curl: ${stdout.substring(0, 100)}`));
+                    reject(new Error(`Invalid JSON from curl: ${stdout.substring(0, 100)} `));
                 }
             } else {
-                reject(new Error(`Curl failed code ${code}: ${stderr}`));
+                reject(new Error(`Curl failed code ${code}: ${stderr} `));
             }
         });
 
@@ -70,7 +71,7 @@ async function fetchWithCobalt(url) {
 
         for (const endpoint of endpoints) {
             try {
-                console.log(`Attempting Cobalt API (Curl) at ${endpoint}...`);
+                console.log(`Attempting Cobalt API(Curl) at ${endpoint}...`);
 
                 // Use Curl instead of Axios to match user's success
                 const data = await runCurl(endpoint, {
@@ -91,6 +92,40 @@ async function fetchWithCobalt(url) {
                         imageUrl = data.thumbnail;
                     }
 
+                    // FFMpeg Fallback (Generate if missing)
+                    if (!imageUrl && videoUrl) {
+                        try {
+                            const rnd = Math.random().toString(36).substring(7);
+                            const tmpVid = `/ tmp / vid_${rnd}.mp4`;
+                            const tmpImg = `/ tmp / img_${rnd}.jpg`;
+
+                            // Download video stream to file
+                            // Using curl to download for speed/simplicity
+                            await new Promise((resolve, reject) => {
+                                const curl = spawn('curl', ['-L', '-o', tmpVid, videoUrl]);
+                                curl.on('close', (code) => code === 0 ? resolve() : reject('DL Failed'));
+                            });
+
+                            // Extract Frame
+                            await new Promise((resolve, reject) => {
+                                const ffmpeg = spawn('ffmpeg', ['-i', tmpVid, '-ss', '00:00:01', '-vframes', '1', tmpImg]);
+                                ffmpeg.on('close', (code) => code === 0 ? resolve() : reject('FF Failed'));
+                            });
+
+                            // Read as Base64
+                            if (fs.existsSync(tmpImg)) {
+                                const b64 = fs.readFileSync(tmpImg, 'base64');
+                                imageUrl = `data: image / jpeg; base64, ${b64} `;
+
+                                // Cleanup
+                                fs.unlinkSync(tmpVid);
+                                fs.unlinkSync(tmpImg);
+                            }
+                        } catch (err) {
+                            console.error("FFMpeg Gen Failed:", err);
+                        }
+                    }
+
                     if (data && (videoUrl)) {
                         return {
                             url_list: [videoUrl],
@@ -98,10 +133,10 @@ async function fetchWithCobalt(url) {
                         };
                     }
                 } else if (data && data.status === 'error') {
-                    console.error(`Cobalt Error (${endpoint}):`, JSON.stringify(data));
+                    console.error(`Cobalt Error(${endpoint}): `, JSON.stringify(data));
                 }
             } catch (e) {
-                console.error(`Cobalt (${endpoint}) failed:`, e.message);
+                console.error(`Cobalt(${endpoint}) failed: `, e.message);
             }
         }
     }
@@ -115,7 +150,7 @@ app.post('/fetch', async (req, res) => {
     // Security: Basic Secret Check
     if (process.env.API_SECRET) {
         const authHeader = req.headers['authorization'];
-        if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
+        if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET} `) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
     }
@@ -124,7 +159,7 @@ app.post('/fetch', async (req, res) => {
         return res.status(400).json({ success: false, error: 'URL is required' });
     }
 
-    console.log(`Fetching: ${url}`);
+    console.log(`Fetching: ${url} `);
 
     // Single Strategy: Cobalt (via Curl)
     const links = await fetchWithCobalt(url);
@@ -147,6 +182,6 @@ app.get('/', (req, res) => {
 
 // Start Server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Cobalt URL: ${process.env.COBALT_URL || 'Using Public Instances'}`);
+    console.log(`Server running on port ${PORT} `);
+    console.log(`Cobalt URL: ${process.env.COBALT_URL || 'Using Public Instances'} `);
 });
