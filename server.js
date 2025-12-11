@@ -213,8 +213,9 @@ async function fetchWithAxios(url) {
 // Helper: Cobalt API Fallback (Public robust downloader)
 async function fetchWithCobalt(url) {
     // Verified Community Instances (Prioritize user-verified ones)
+    const selfHosted = process.env.COBALT_URL ? process.env.COBALT_URL.replace(/\/$/, '') : null;
     const instances = [
-        ...(process.env.COBALT_URL ? [process.env.COBALT_URL] : []), // User's self-hosted instance (Priority #1)
+        ...(selfHosted ? [selfHosted] : []), // User's self-hosted instance (Priority #1)
         'https://cobalt.meowing.de',     // Verified by user behavior
         'https://cobalt.clxxped.lol',
         'https://cobalt.canine.tools',
