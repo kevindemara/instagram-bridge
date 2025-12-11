@@ -96,56 +96,57 @@ async function fetchWithCobalt(url) {
                             url_list: [videoUrl],
                             image_url: imageUrl
                         };
-                    } else if (data && data.status === 'error') {
-                        console.error(`Cobalt Error (${endpoint}):`, JSON.stringify(data));
                     }
-                } catch (e) {
-                    console.error(`Cobalt (${endpoint}) failed:`, e.message);
+                } else if (data && data.status === 'error') {
+                    console.error(`Cobalt Error (${endpoint}):`, JSON.stringify(data));
                 }
-            }
-    }
-        return null;
-    }
-
-    // Main Endpoint
-    app.post('/fetch', async (req, res) => {
-        const { url } = req.body;
-
-        // Security: Basic Secret Check
-        if (process.env.API_SECRET) {
-            const authHeader = req.headers['authorization'];
-            if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
-                return res.status(401).json({ success: false, error: 'Unauthorized' });
+            } catch (e) {
+                console.error(`Cobalt (${endpoint}) failed:`, e.message);
             }
         }
+    }
+    return null;
+}
 
-        if (!url) {
-            return res.status(400).json({ success: false, error: 'URL is required' });
+// Main Endpoint
+app.post('/fetch', async (req, res) => {
+    const { url } = req.body;
+
+    // Security: Basic Secret Check
+    if (process.env.API_SECRET) {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
+    }
 
-        console.log(`Fetching: ${url}`);
+    if (!url) {
+        return res.status(400).json({ success: false, error: 'URL is required' });
+    }
 
-        // Single Strategy: Cobalt (via Curl)
-        const links = await fetchWithCobalt(url);
+    console.log(`Fetching: ${url}`);
 
-        if (links) {
-            return res.json({ success: true, ...links });
-        } else {
-            return res.status(404).json({
-                success: false,
-                error: 'No media found',
-                details: 'Cobalt failed to retrieve media.'
-            });
-        }
-    });
+    // Single Strategy: Cobalt (via Curl)
+    const links = await fetchWithCobalt(url);
 
-    // Root Endpoint
-    app.get('/', (req, res) => {
-        res.send('Instagram Bridge (Cobalt Only) is running. POST to /fetch to use.');
-    });
+    if (links) {
+        return res.json({ success: true, ...links });
+    } else {
+        return res.status(404).json({
+            success: false,
+            error: 'No media found',
+            details: 'Cobalt failed to retrieve media.'
+        });
+    }
+});
 
-    // Start Server
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-        console.log(`Cobalt URL: ${process.env.COBALT_URL || 'Using Public Instances'}`);
-    });
+// Root Endpoint
+app.get('/', (req, res) => {
+    res.send('Instagram Bridge (Cobalt Only) is running. POST to /fetch to use.');
+});
+
+// Start Server
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Cobalt URL: ${process.env.COBALT_URL || 'Using Public Instances'}`);
+});
