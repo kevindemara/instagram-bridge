@@ -163,6 +163,7 @@ async function fetchWithAxios(url) {
 async function fetchWithCobalt(url) {
     // Verified Community Instances (Prioritize user-verified ones)
     const instances = [
+        ...(process.env.COBALT_URL ? [process.env.COBALT_URL] : []), // User's self-hosted instance (Priority #1)
         'https://cobalt.meowing.de',     // Verified by user behavior
         'https://cobalt.clxxped.lol',
         'https://cobalt.canine.tools',
