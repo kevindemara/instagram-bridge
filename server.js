@@ -161,48 +161,56 @@ async function fetchWithAxios(url) {
 
 // Helper: Cobalt API Fallback (Public robust downloader)
 async function fetchWithCobalt(url) {
-    // Verified Community Instances (from cobalt.directory)
+    // Verified Community Instances (Prioritize user-verified ones)
     const instances = [
+        'https://cobalt.meowing.de',     // Verified by user behavior
         'https://cobalt.clxxped.lol',
-        'https://cobalt.meowing.de',
         'https://cobalt.canine.tools',
-        'https://cobalt.kwiatekmiki.com' // Fallback
+        'https://cobalt.kwiatekmiki.com'
     ];
 
     for (const instance of instances) {
-        try {
-            console.log(`Attempting Cobalt API at ${instance}...`);
-            // Try v10 endpoint (root)
-            const endpoint = instance + '/';
+        // Try both v10 (root) and v7 (/api/json) endpoints for each instance
+        const endpoints = [
+            instance + '/',         // v10
+            instance + '/api/json'  // v7
+        ];
 
-            const response = await axios.post(endpoint, {
-                url: url,
-                videoQuality: 'max',
-                filenameStyle: 'classic', // Correct parameter name
-                isAudioOnly: false,
-                disableMetadata: true
-            }, {
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                timeout: 25000
-            });
+        for (const endpoint of endpoints) {
+            try {
+                console.log(`Attempting Cobalt API at ${endpoint}...`);
 
-            const data = response.data;
-            // v10 response: { status: 'stream', url: '...' } or { status: 'success', text: '...' }
-            if (data && (data.url || (data.picker && data.picker[0].url))) {
-                const videoUrl = data.url || data.picker[0].url;
-                const imageUrl = data.picker && data.picker[0].thumb ? data.picker[0].thumb : '';
-                return {
-                    url_list: [videoUrl],
-                    image_url: imageUrl
-                };
+                const response = await axios.post(endpoint, {
+                    url: url,
+                    videoQuality: 'max',
+                    filenameStyle: 'classic',
+                    isAudioOnly: false,
+                    disableMetadata: true
+                }, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 15000
+                });
+
+                const data = response.data;
+                if (data && (data.url || (data.picker && data.picker[0].url) || data.stream)) {
+                    const videoUrl = data.url || (data.picker ? data.picker[0].url : data.stream);
+                    const imageUrl = data.picker && data.picker[0].thumb ? data.picker[0].thumb : '';
+                    return {
+                        url_list: [videoUrl],
+                        image_url: imageUrl
+                    };
+                }
+            } catch (e) {
+                const status = e.response ? e.response.status : 'N/A';
+                // Don't log full data for 404/405 to keep logs clean
+                if (status !== 404 && status !== 405) {
+                    const data = e.response ? JSON.stringify(e.response.data) : 'No Data';
+                    console.error(`Cobalt (${endpoint}) failed: Status ${status}, Data: ${data}`);
+                }
             }
-        } catch (e) {
-            const status = e.response ? e.response.status : 'N/A';
-            const data = e.response ? JSON.stringify(e.response.data) : 'No Data';
-            console.error(`Cobalt (${instance}) failed: Status ${status}, Data: ${data}`);
         }
     }
     return null;
