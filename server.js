@@ -80,61 +80,72 @@ async function fetchWithCobalt(url) {
 
                 if (data && (data.url || (data.picker && data.picker[0].url) || data.stream)) {
                     const videoUrl = data.url || (data.picker ? data.picker[0].url : data.stream);
-                    const imageUrl = data.picker && data.picker[0].thumb ? data.picker[0].thumb : '';
-                    return {
-                        url_list: [videoUrl],
-                        image_url: imageUrl
-                    };
-                } else if (data && data.status === 'error') {
-                    console.error(`Cobalt Error (${endpoint}):`, JSON.stringify(data));
+
+                    // Robust Thumbnail Extraction
+                    let imageUrl = '';
+                    if (data.picker && data.picker[0] && data.picker[0].thumb) {
+                        imageUrl = data.picker[0].thumb;
+                    } else if (data.thumb) {
+                        imageUrl = data.thumb;
+                    } else if (data.thumbnail) {
+                        imageUrl = data.thumbnail;
+                    }
+
+                    if (data && (videoUrl)) {
+                        return {
+                            url_list: [videoUrl],
+                            image_url: imageUrl
+                        };
+                    } else if (data && data.status === 'error') {
+                        console.error(`Cobalt Error (${endpoint}):`, JSON.stringify(data));
+                    }
+                } catch (e) {
+                    console.error(`Cobalt (${endpoint}) failed:`, e.message);
                 }
-            } catch (e) {
-                console.error(`Cobalt (${endpoint}) failed:`, e.message);
+            }
+    }
+        return null;
+    }
+
+    // Main Endpoint
+    app.post('/fetch', async (req, res) => {
+        const { url } = req.body;
+
+        // Security: Basic Secret Check
+        if (process.env.API_SECRET) {
+            const authHeader = req.headers['authorization'];
+            if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
+                return res.status(401).json({ success: false, error: 'Unauthorized' });
             }
         }
-    }
-    return null;
-}
 
-// Main Endpoint
-app.post('/fetch', async (req, res) => {
-    const { url } = req.body;
-
-    // Security: Basic Secret Check
-    if (process.env.API_SECRET) {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
-            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        if (!url) {
+            return res.status(400).json({ success: false, error: 'URL is required' });
         }
-    }
 
-    if (!url) {
-        return res.status(400).json({ success: false, error: 'URL is required' });
-    }
+        console.log(`Fetching: ${url}`);
 
-    console.log(`Fetching: ${url}`);
+        // Single Strategy: Cobalt (via Curl)
+        const links = await fetchWithCobalt(url);
 
-    // Single Strategy: Cobalt (via Curl)
-    const links = await fetchWithCobalt(url);
+        if (links) {
+            return res.json({ success: true, ...links });
+        } else {
+            return res.status(404).json({
+                success: false,
+                error: 'No media found',
+                details: 'Cobalt failed to retrieve media.'
+            });
+        }
+    });
 
-    if (links) {
-        return res.json({ success: true, ...links });
-    } else {
-        return res.status(404).json({
-            success: false,
-            error: 'No media found',
-            details: 'Cobalt failed to retrieve media.'
-        });
-    }
-});
+    // Root Endpoint
+    app.get('/', (req, res) => {
+        res.send('Instagram Bridge (Cobalt Only) is running. POST to /fetch to use.');
+    });
 
-// Root Endpoint
-app.get('/', (req, res) => {
-    res.send('Instagram Bridge (Cobalt Only) is running. POST to /fetch to use.');
-});
-
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Cobalt URL: ${process.env.COBALT_URL || 'Using Public Instances'}`);
-});
+    // Start Server
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Cobalt URL: ${process.env.COBALT_URL || 'Using Public Instances'}`);
+    });
