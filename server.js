@@ -37,34 +37,51 @@ app.get('/', (req, res) => {
 
 // Helper: Puppeteer Fallback (The simplified, headless browser approach)
 async function fetchWithPuppeteer(url) {
+    console.log('Attempting Puppeteer Stealth...');
     let browser = null;
     try {
-        console.log('Attempting Puppeteer...');
-        // Debug Env
-        console.log('Env PUPPETEER_EXECUTABLE_PATH:', process.env.PUPPETEER_EXECUTABLE_PATH);
+        // Use puppeteer-extra for stealth
+        const puppeteer = require('puppeteer-extra');
+        const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+        puppeteer.use(StealthPlugin());
+
+        const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
+        console.log(`Env PUPPETEER_EXECUTABLE_PATH: ${executablePath}`);
 
         browser = await puppeteer.launch({
-            // Use env var (set to /usr/bin/chromium in Dockerfile)
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 'chromium',
+            executablePath: executablePath,
+            headless: 'new',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
                 '--single-process',
-                '--disable-blink-features=AutomationControlled' // Stealth trick
-            ],
-            headless: 'new'
+                '--disable-gpu'
+            ]
         });
 
         const page = await browser.newPage();
 
-        // Stealth User Agent
-        const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
-        await page.setUserAgent(UA);
+        // Stealth: Set User Agent override explicitly just in case
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        // Optional: Inject Cookie if provided (Bypass Login Wall)
+        if (process.env.IG_COOKIE) {
+            console.log('Injecting IG_COOKIE session...');
+            const cookies = process.env.IG_COOKIE.split(';').map(c => {
+                const [name, value] = c.split('=').map(s => s.trim());
+                return { name, value, domain: '.instagram.com' };
+            });
+            await page.setCookie(...cookies);
+        }
 
         console.log(`Navigating to ${url}`);
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 25000 });
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
 
+        // Debug: Check Title
         const title = await page.title();
         console.log(`Page Title: ${title}`);
 
