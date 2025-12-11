@@ -235,10 +235,7 @@ async function fetchWithCobalt(url) {
 
                 const response = await axios.post(endpoint, {
                     url: url,
-                    videoQuality: 'max',
-                    filenameStyle: 'classic',
-                    isAudioOnly: false,
-                    disableMetadata: true
+                    filenameStyle: 'basic' // Minimal payload for v7/v10 compatibility
                 }, {
                     headers: {
                         'Accept': 'application/json',
