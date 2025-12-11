@@ -35,36 +35,54 @@ app.get('/', (req, res) => {
     res.send('Instagram Bridge is running. POST to /fetch to use.');
 });
 
-// Fallback: RapidAPI (Paid/Freemium Service)
+// Fallback: RapidAPI (Generic - User Configurable)
 async function fetchWithRapidAPI(url) {
     if (!process.env.RAPIDAPI_KEY) return null;
 
-    console.log('Attempting RapidAPI...');
+    // Defaults to RocketAPI (Gold Standard)
+    const host = process.env.RAPIDAPI_HOST || 'rocketapi-for-instagram.p.rapidapi.com';
+    const endpoint = process.env.RAPIDAPI_ENDPOINT || '/instagram/media';
+    const method = process.env.RAPIDAPI_METHOD || 'POST';
+
+    console.log(`Attempting RapidAPI (${host})...`);
     try {
         const options = {
-            method: 'GET',
-            url: 'https://instagram-downloader-2022.p.rapidapi.com/url',
-            params: { url: url },
+            method: method,
+            url: `https://${host}${endpoint}`,
             headers: {
+                'content-type': 'application/json',
                 'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'instagram-downloader-2022.p.rapidapi.com'
+                'X-RapidAPI-Host': host
             }
         };
 
+        if (method === 'GET') {
+            options.params = { url: url };
+        } else {
+            options.data = { url: url };
+        }
+
         const response = await axios.request(options);
-        if (response.data && response.data.Type === 'Post-Video') {
+        const data = response.data;
+
+        // 1. RocketAPI Format
+        if (data && data.response && data.response.body) {
+            const body = data.response.body;
+            if (body.video_url) return { url_list: [body.video_url], image_url: body.thumbnail_url || '' };
+            if (body.items && body.items[0] && body.items[0].video_versions) return { url_list: [body.items[0].video_versions.sort((a, b) => b.width - a.width)[0].url], image_url: '' };
+        }
+
+        // 2. Generic Format (video_url / url_list)
+        if (data && (data.video_url || data.link || data.url)) {
             return {
-                url_list: [response.data.VideoUrl],
-                image_url: response.data.ThumbImgUrl
-            };
-        } else if (response.data && response.data.Type === 'Post-Image') {
-            return {
-                url_list: [], // Image only
-                image_url: response.data.ImageUrl
+                url_list: [data.video_url || data.link || data.url],
+                image_url: data.thumbnail || data.thumb || ''
             };
         }
+
     } catch (error) {
         console.error('RapidAPI failed:', error.message);
+        if (error.response) console.error('RapidAPI Response:', error.response.data);
     }
     return null;
 }
