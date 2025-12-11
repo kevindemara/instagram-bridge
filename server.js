@@ -189,7 +189,9 @@ async function fetchWithCobalt(url) {
                 }, {
                     headers: {
                         'Accept': 'application/json',
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Origin': instance, // Critical for bypassing 405/CORS
+                        'Referer': instance + '/'
                     },
                     timeout: 15000
                 });
