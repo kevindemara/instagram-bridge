@@ -105,15 +105,17 @@ async function fetchWithCobalt(url) {
                             // Using curl to download for speed/simplicity
                             await new Promise((resolve, reject) => {
                                 // Added -k to ignore SSL issues in container
-                                const curl = spawn('curl', ['-L', '-k', '-o', tmpVid, videoUrl]);
+                                const curl = spawn('curl', ['-L', '-k', '-o', tmpVid, videoUrl], { stdio: 'ignore' });
                                 curl.on('close', (code) => code === 0 ? resolve() : reject('DL Failed code ' + code));
+                                curl.on('error', (err) => reject('DL Error ' + err));
                             });
                             debugLog.push("Video Downloaded");
 
                             // Extract Frame
                             await new Promise((resolve, reject) => {
-                                const ffmpeg = spawn('ffmpeg', ['-i', tmpVid, '-ss', '00:00:01', '-vframes', '1', tmpImg]);
+                                const ffmpeg = spawn('ffmpeg', ['-i', tmpVid, '-ss', '00:00:01', '-vframes', '1', tmpImg], { stdio: 'ignore' });
                                 ffmpeg.on('close', (code) => code === 0 ? resolve() : reject('FFMpeg Failed code ' + code));
+                                ffmpeg.on('error', (err) => reject('FF Error ' + err));
                             });
                             debugLog.push("Frame Extracted");
 
