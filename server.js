@@ -191,9 +191,10 @@ async function fetchWithCobalt(url) {
                         'Accept': 'application/json',
                         'Content-Type': 'application/json',
                         'Origin': instance, // Critical for bypassing 405/CORS
-                        'Referer': instance + '/'
+                        'Referer': instance + '/',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' // Bypass "axios" block
                     },
-                    timeout: 15000
+                    timeout: 25000
                 });
 
                 const data = response.data;
